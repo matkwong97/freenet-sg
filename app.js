@@ -13,9 +13,79 @@ const DATA=[
 const $=id=>document.getElementById(id);let offlinePack={};let onlineSuggestions=[];let suggestTimer;let lang=localStorage.fn_lang||'en',mode=localStorage.fn_theme||'auto',current=null,cheeky=false,cache=JSON.parse(localStorage.fn_cache||'{}'),bookmarks=JSON.parse(localStorage.fn_bookmarks||'[]');const norm=s=>s.toLowerCase().trim();const tr=k=>T[lang][k];function builtin(q){return DATA.find(d=>norm(d[0])===norm(q))||DATA.find(d=>norm(d[0]).includes(norm(q))&&q.length>3)}function allTopics(){return [...new Set([...DATA.map(d=>d[0]),...Object.values(cache).map(x=>x.title),...Object.values(offlinePack).map(x=>x.title)])]}function translate(){document.documentElement.lang=lang;document.querySelectorAll('[data-i]').forEach(e=>e.textContent=tr(e.dataset.i));document.querySelectorAll('[data-placeholder]').forEach(e=>e.placeholder=tr(e.dataset.placeholder));$('filter').placeholder=tr('filter');$('lang').value=lang;renderHome();if(current)renderArticle()}function solar(){const now=new Date(),h=now.getHours()+now.getMinutes()/60;let rise=7,set=19;try{const tz=Intl.DateTimeFormat().resolvedOptions().timeZone;if(tz!=='Asia/Singapore'){rise=6.5;set=18.5}}catch{}return h<rise||h>=set}function theme(){const dark=mode==='dark'||(mode==='auto'&&solar());document.body.classList.toggle('dark',dark);$('theme').textContent=dark?'🌙':'☀️';$('theme').title=`Theme: ${mode} (tap to change)`}function go(page){['home','results','library'].forEach(x=>$(x).classList.toggle('hidden',x!==page));history.pushState({page},'',page==='home'?'./':`#${page}`);window.scrollTo(0,0);if(page==='library')renderLibrary()}function suggestionButtons(container,topics){container.innerHTML='';topics.forEach(t=>{let b=document.createElement('button');b.className='pill';b.textContent=t;b.onclick=()=>openTopic(t);container.append(b)})}function renderHome(){const recent=bookmarks.slice(0,5);$('recent').innerHTML='';if(!recent.length)$('recent').textContent=tr('empty');recent.forEach(b=>addItem($('recent'),b));suggestionButtons($('featured'),DATA.slice(0,8).map(x=>x[0]));updateSuggestions()}function addItem(parent,b){const div=document.createElement('div');div.className='item';const link=document.createElement('button');link.className='link';link.textContent=b.title;link.onclick=()=>openTopic(b.title);const del=document.createElement('button');del.className='pill';del.textContent='×';del.setAttribute('aria-label','Remove bookmark');del.onclick=()=>{bookmarks=bookmarks.filter(x=>norm(x.title)!==norm(b.title));persist();renderHome();renderLibrary()};div.append(link,del);parent.append(div)}function updateSuggestions(){const q=norm($('query').value);suggestionButtons($('suggestions'),q?[...new Set([...allTopics().filter(t=>norm(t).includes(q)),...onlineSuggestions])].slice(0,8):['Singapore','Artificial intelligence','Climate change']);clearTimeout(suggestTimer);if(q.length>=2&&navigator.onLine){suggestTimer=setTimeout(async()=>{try{const r=await fetch(`https://${lang}.wikipedia.org/w/api.php?action=opensearch&search=${encodeURIComponent(q)}&limit=8&namespace=0&format=json&origin=*`,{signal:AbortSignal.timeout(5000)});const j=await r.json();if(norm($('query').value)===q){onlineSuggestions=j[1]||[];suggestionButtons($('suggestions'),[...new Set([...allTopics().filter(t=>norm(t).includes(q)),...onlineSuggestions])].slice(0,8))}}catch{}},300)}}function persist(){try{localStorage.fn_cache=JSON.stringify(cache)}catch{const keys=Object.keys(cache);for(const k of keys.slice(0,Math.ceil(keys.length/2)))delete cache[k];try{localStorage.fn_cache=JSON.stringify(cache)}catch{}}try{localStorage.fn_bookmarks=JSON.stringify(bookmarks)}catch{alert('Device storage is full. Export your bookmarks or free up space.')}}function savedData(title){if(offlinePack[norm(title)])return {...offlinePack[norm(title)],source:'offline'};const b=builtin(title);if(b)return{title:b[0],en:b[1],zh:b[2],ms:b[3],fun:b[4],source:'offline'};return cache[norm(title)]||bookmarks.find(x=>norm(x.title)===norm(title))||null}async function fetchWiki(q){if(!navigator.onLine)return null;try{const api=lang==='zh'?'zh':lang==='ms'?'ms':'en';const r=await fetch(`https://${api}.wikipedia.org/w/api.php?action=query&generator=search&gsrsearch=${encodeURIComponent(q)}&gsrlimit=1&prop=extracts&explaintext=1&exchars=2400&format=json&origin=*`,{signal:AbortSignal.timeout(9000)});if(!r.ok)throw Error();const data=await r.json();const p=Object.values(data.query?.pages||{})[0];if(!p?.extract)return null;return{title:p.title,[lang]:p.extract,source:'online',wikiLang:lang}}catch{return null}}function formatFun(text,article){
  const title=article?.title||'this topic';
  const cat=typeof inferCategory==='function'?inferCategory(article||{}):'Other';
- const intro={Finance:`Wah, ${title} ah? Finance jargon sounds chim, but we break it down properly.`,History:`Eh, ${title} got quite a story. Here's what actually happened, no drama added.`,Science:`Okay, ${title} sounds complicated, but the science is quite interesting lah.`,Geography:`Let's jalan around the world a bit. ${title}, here we go.`,People:`This person, ${title}, quite influential you know. Here's the important part.`,Food:`Wah, ${title}! Before you order, better know what you're eating, right?`,Other:`Aiyoh, curious about ${title}? Can, here's the gist.`}[cat]||`Aiyoh, ${title}? Here's the gist.`;
- const closing={Finance:'Important ah: higher potential returns can mean higher risks. Don’t anyhow whack.',History:'History got context one. Remember the dates and what led to what, can?',Science:'Not magic lah — just how the world works. Quite shiok to learn.',Geography:'Now you got some geography knowledge. Steady lah.',People:'People are complicated, so learn their impact and the context too.',Food:'Now at least when you see it on the menu, you know what’s going on. Shiok!',Other:'There you go — one more thing you know. Steady!'}[cat];
- return `${intro}\n\n${text}\n\n${closing}`;
+ const bespoke={
+ 'Lee Kuan Yew':`Wah, Lee Kuan Yew ah. This one cannot just say “Singapore's first PM” and call it a day lah. The man practically helped write Singapore's modern origin story.
+
+START FROM THE BEGINNING
+Born in 1923, studied law at Cambridge, then came back and helped start the PAP in 1954. By 1959, he was prime minister. Not bad for someone who was still in his thirties, hor?
+
+THE INDEPENDENCE PLOT TWIST
+Initially, he believed Singapore's future was with Malaysia. So Singapore joined in 1963. But politics, economic disagreements and racial tensions made the marriage very rocky. In 1965, Singapore separated. Suddenly, tiny island, no natural resources, and got to survive on its own. Stressful or not?
+
+SO WHAT DID HE ACTUALLY DO?
+His government pushed hard on jobs, foreign investment, public housing, schools, defence and clean administration. Those policies helped transform Singapore into a prosperous international hub. Not some overnight miracle lah — decades of work, trade-offs and other people contributing too.
+
+BUT GOT CONTROVERSY OR NOT?
+Of course got. His tough approach also meant serious restrictions on political opponents, the press and civil liberties. Some admire his effectiveness; others argue Singapore paid a democratic price. Both parts belong in the story.
+
+MATTHEW'S TAKE
+Big impact, big personality, big debates. If you want to understand modern Singapore, you really cannot skip Lee Kuan Yew. But don't just worship or condemn — understand what he built, how he did it, and the costs involved. Steady?`,
+ 'Leverage':`Aiyoh, leverage. Finance people make it sound very atas, but it's basically using borrowed money to make your investment bigger.
+
+SIMPLE EXAMPLE
+You got $20,000, borrow another $80,000, and buy $100,000 worth of assets. Market goes up 10%? Your investment becomes $110,000. After paying back the loan principal, your equity is $30,000 — a 50% gain before costs. Shiok, right?
+
+BUT HOR, REVERSE ALSO WORKS
+Market drops 10%? Your equity becomes $10,000. Half your own money gone. And you still owe interest! If your collateral drops too far, lender can ask you to top up or sell your position.
+
+MATTHEW'S TAKE
+Leverage is like putting a turbocharger on your portfolio. Faster when things go well, but the crash can be much uglier. Don't anyhow whack lah.`,
+ 'Coq au vin':`Wah, coq au vin. Sounds like some super atas French restaurant dish, but actually it's classic countryside comfort food lah.
+
+WHAT IS IT?
+Literally means “rooster in wine.” These days people usually use chicken, slowly braised in red wine with mushrooms, onions, bacon or lardons, and herbs. Imagine a rich, savoury chicken stew with deep wine flavour.
+
+WHERE DID IT COME FROM?
+It's associated with French country cooking, especially Burgundy, where wine is a big deal. Different French regions have their own versions.
+
+HOW DO YOU EAT IT?
+In French homes and bistros, often with mashed potatoes, bread or noodles to mop up the sauce. Waste the gravy for what, right?
+
+MATTHEW'S TAKE
+Don't let the French name scare you. It's basically chicken cooked low and slow until the sauce becomes ridiculously flavourful. Quite shiok actually.`
+ };
+ if(lang==='en'&&bespoke[title])return bespoke[title];
+ const openings={
+ Finance:`Wah, ${title} ah? Sounds like banker jargon, but we unpack it properly, can.`,
+ History:`Eh, ${title} — this one got serious history behind it. Let's understand what happened.`,
+ Science:`Okay, ${title} sounds chim, but actually quite interesting once you break it down.`,
+ Geography:`Come, we go on a little geography trip. Today's stop: ${title}.`,
+ People:`Wah, ${title}. Quite a consequential person, you know. Let's see why.`,
+ Food:`Eh, ${title}! Before you order, let's find out what you're actually eating.`,
+ Other:`Aiyoh, ${title}? Curious ah? Can, let's figure it out.`
+ };
+ const bridges={
+ Finance:['First thing first: ','Now here is the part you must pay attention to: ','One more thing, hor: ','So what does this mean in practice? '],
+ History:['Set the scene first: ','Then things got interesting: ','The important turning point: ','Why does this matter today? '],
+ Science:['Start with the basics: ','Now the clever part: ','Another thing to know: ','So what is the takeaway? '],
+ Geography:['First, get your bearings: ','Here is what makes it worth knowing: ','Another interesting bit: ','And the bigger picture? '],
+ People:['First, who are we talking about? ','Now for their impact: ','But there is more to the story: ','So why remember this person? '],
+ Food:['First, what is it? ','Where did it come from? ','How do people enjoy it? ','One more tasty detail: '],
+ Other:['Okay, basics first: ','Next up: ','Something else worth knowing: ','So in short: ']
+ };
+ const closings={
+ Finance:'Matthew says: understand the risks and mechanics first. Don’t see fancy terms then anyhow invest, hor.',
+ History:'Matthew says: history is not just memorising dates lah. The causes and consequences are the real story.',
+ Science:'Matthew says: science quite power, right? The more you understand, the less mysterious it becomes.',
+ Geography:'Matthew says: one more place added to your mental world map. Steady!',
+ People:'Matthew says: influential people are rarely simple heroes or villains. Context matters, lah.',
+ Food:'Matthew says: now when you see this on a menu, at least you know what you are ordering. Shiok!',
+ Other:'Matthew says: see? One more thing learned. Not bad, lah!'
+ };
+ const sections=text.split(/\n\s*\n/).map(x=>x.trim()).filter(Boolean);
+ const segments=sections.length>1?sections:(text.match(/[^.!?]+[.!?]+(?:\s|$)|[^.!?]+$/g)||[text]).map(x=>x.trim()).filter(Boolean).reduce((a,x,i)=>{const idx=Math.floor(i/3);(a[idx]??=[]).push(x);return a},[]).map(a=>a.join(' '));
+ const lead=openings[cat]||openings.Other, cues=bridges[cat]||bridges.Other;
+ return [lead,...segments.map((part,i)=>`${cues[i%cues.length]}${part}${i===0?' Quite important to get this part right, hor.':''}`),closings[cat]||closings.Other].join('\n\n');
 }function renderArticle(){if(!current)return;const d=current;const base=d[lang]||d.en||d.zh||d.ms||tr('missing');const txt=base+(lang==='en'&&d.detail_en?'\n\n'+d.detail_en:'');$('articleTitle').textContent=d.title;$('articleStatus').textContent=(d.source==='online'?tr('online'):d.source==='missing'?tr('missing'):tr('offline'))+((lang!=='en'&&!d[lang]&&d.en)?' · English article (translation unavailable)':'');$('articleText').textContent=cheeky?(d.fun&&lang==='en'?d.fun:formatFun(txt,d)):txt;$('matthew').textContent=cheeky?tr('normal'):tr('matthew');$('save').textContent=bookmarks.some(x=>norm(x.title)===norm(d.title))?tr('remove'):tr('save');suggestionButtons($('related'),allTopics().filter(t=>norm(t)!==norm(d.title)&&inferCategory({title:t,category:offlinePack[norm(t)]?.category})===inferCategory(d)).slice(0,4))}async function openTopic(q){q=q.trim();if(!q)return;cheeky=false;current=savedData(q)||{title:q,source:'missing'};go('results');renderArticle();if(current.source==='missing'||(current.source==='online'&&!current[lang])){const res=await fetchWiki(q);if(res&&norm(current.title)===norm(q)){current={...current,...res};cache[norm(q)]=current;persist();renderArticle()}}}function renderLibrary(){const q=norm($('filter').value);$('savedList').innerHTML='';const list=bookmarks.filter(x=>norm(x.title).includes(q));if(!list.length)$('savedList').textContent=tr('empty');list.forEach(b=>addItem($('savedList'),b))}async function loadOfflinePack(){try{const db=await new Promise((resolve,reject)=>{const req=indexedDB.open('freenet-packs',1);req.onupgradeneeded=()=>req.result.createObjectStore('articles');req.onsuccess=()=>resolve(req.result);req.onerror=()=>reject(req.error)});window.packDB=db;await new Promise(resolve=>{const tx=db.transaction('articles');const req=tx.objectStore('articles').getAll();req.onsuccess=()=>{for(const a of req.result||[])offlinePack[norm(a.title)]=a;resolve()};req.onerror=resolve});renderHome()}catch(e){console.warn('Offline pack unavailable',e)}}
 $('packImport').onchange=async e=>{const file=e.target.files?.[0];if(!file)return;try{const parsed=JSON.parse(await file.text());const articles=Array.isArray(parsed)?parsed:parsed.articles;if(!Array.isArray(articles)||articles.length>100000||articles.some(a=>typeof a.title!=='string'||!(a.en||a.zh||a.ms)))throw Error('Expected an array of articles with title and en, zh or ms text. Maximum 100,000 per pack.');if(!window.packDB)throw Error('IndexedDB unavailable');const tx=window.packDB.transaction('articles','readwrite');for(const a of articles){tx.objectStore('articles').put({title:a.title.slice(0,300),en:String(a.en||''),zh:String(a.zh||''),ms:String(a.ms||'')},norm(a.title));offlinePack[norm(a.title)]={...a,source:'offline'}}await new Promise((resolve,reject)=>{tx.oncomplete=resolve;tx.onerror=()=>reject(tx.error)});$('packStatus').textContent=`${Object.keys(offlinePack).length.toLocaleString()} offline articles installed`;renderHome()}catch(err){alert('Could not import pack: '+err.message)}e.target.value=''};
 $('searchForm').onsubmit=e=>{e.preventDefault();openTopic($('query').value)};$('query').oninput=updateSuggestions;$('lang').onchange=e=>{lang=e.target.value;localStorage.fn_lang=lang;translate()};$('theme').onclick=()=>{mode=mode==='auto'?'light':mode==='light'?'dark':'auto';localStorage.fn_theme=mode;theme()};$('back1').onclick=$('back2').onclick=()=>go('home');$('all').onclick=()=>go('library');$('filter').oninput=renderLibrary;$('matthew').onclick=()=>{cheeky=!cheeky;renderArticle()};$('save').onclick=()=>{if(!current||current.source==='missing')return;const has=bookmarks.some(x=>norm(x.title)===norm(current.title));bookmarks=has?bookmarks.filter(x=>norm(x.title)!==norm(current.title)):[{...current},...bookmarks];persist();renderArticle();renderHome()};$('share').onclick=async()=>{const text=`${current.title}\n\n${$('articleText').textContent}\n\nFreeNet SG`;try{if(navigator.share)await navigator.share({title:current.title,text});else await navigator.clipboard.writeText(text)}catch{}};window.onpopstate=e=>{const page=e.state?.page||'home';['home','results','library'].forEach(x=>$(x).classList.toggle('hidden',x!==page))};// V5 category explorer: all results are from the bundled offline library.

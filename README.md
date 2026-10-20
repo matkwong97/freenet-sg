@@ -3,3 +3,5 @@ FreeNet SG V5 — Offline-first text encyclopedia. Includes 677 bundled English-
 V6: Matthew Mode now works entirely in the browser for both built-in offline articles and online Wikipedia summaries (when available or previously cached). It is a deterministic Singlish framing around the original factual text, not an AI rewrite. Existing custom Matthew explanations remain. Fixed startup initialization order for category browsing.
 
 V7: Detailed multi-section offline articles for 12 priority subjects, including Lee Kuan Yew, core finance, wars, Singapore history and food. Wikipedia online fetch increased to up to 2400 characters of plain text. Remaining offline entries retain their existing concise text; they have NOT all been expanded yet. Related suggestions now favor same-category entries. Clear the site cache or reload after deployment.
+
+V8: Matthew Mode has bespoke original Singlish explainers for Lee Kuan Yew, Leverage and Coq au vin, plus category-sensitive conversational restructuring for all other offline and online articles. Generic mode retains source facts, and does not use an AI API. The bespoke texts are English only. Cache version updated.
