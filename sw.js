@@ -1,1 +1,17 @@
-const CACHE='freenet-sg-v8';const ASSETS=['./','./index.html','./app.js','./manifest.webmanifest','./essential-knowledge.json'];self.addEventListener('install',e=>{e.waitUntil(caches.open(CACHE).then(c=>c.addAll(ASSETS)));self.skipWaiting()});self.addEventListener('activate',e=>{e.waitUntil(caches.keys().then(keys=>Promise.all(keys.filter(k=>k!==CACHE).map(k=>caches.delete(k)))));self.clients.claim()});self.addEventListener('fetch',e=>{if(e.request.method!=='GET'||new URL(e.request.url).origin!==location.origin)return;e.respondWith(caches.match(e.request).then(c=>c||fetch(e.request).then(r=>{if(r.ok){const copy=r.clone();caches.open(CACHE).then(cache=>cache.put(e.request,copy))}return r})))})
+const CACHE='freenet-sg-v10';
+const ASSETS=['./','./index.html','./app.js','./manifest.webmanifest','./essential-knowledge.json'];
+self.addEventListener('install',event=>{event.waitUntil(caches.open(CACHE).then(cache=>cache.addAll(ASSETS)));self.skipWaiting()});
+self.addEventListener('activate',event=>{event.waitUntil(caches.keys().then(keys=>Promise.all(keys.filter(key=>key!==CACHE).map(key=>caches.delete(key)))));self.clients.claim()});
+self.addEventListener('fetch',event=>{
+ if(event.request.method!=='GET'||new URL(event.request.url).origin!==location.origin)return;
+ event.respondWith((async()=>{
+  const cache=await caches.open(CACHE);
+  try {
+   const response=await fetch(event.request,{cache:'no-store'});
+   if(response.ok)await cache.put(event.request,response.clone());
+   return response;
+  }catch{
+   return await cache.match(event.request)||await caches.match(event.request)||Response.error();
+  }
+ })());
+});
