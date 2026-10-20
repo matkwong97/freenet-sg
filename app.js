@@ -12,21 +12,28 @@ const DATA=[
 ['Singapore history','Modern Singapore became a British trading post in 1819, experienced Japanese occupation during World War II, gained self-government in 1959, joined Malaysia in 1963 and became independent on 9 August 1965.','新加坡于1819年成为英国贸易站，二战期间遭日本占领，1959年取得自治，1963年加入马来西亚，并于1965年8月9日独立。','Singapura menjadi pusat perdagangan British pada 1819, diduduki Jepun semasa Perang Dunia Kedua, berkerajaan sendiri pada 1959 dan merdeka pada 9 Ogos 1965.','From trading port to independent country in 1965, Singapore history got more plot twists than drama series lah.']];
 const $=id=>document.getElementById(id);let offlinePack={};let onlineSuggestions=[];let suggestTimer;let lang=localStorage.fn_lang||'en',mode=localStorage.fn_theme||'auto',current=null,cheeky=false,cache=JSON.parse(localStorage.fn_cache||'{}'),bookmarks=JSON.parse(localStorage.fn_bookmarks||'[]');const norm=s=>s.toLowerCase().trim();const tr=k=>T[lang][k];function builtin(q){return DATA.find(d=>norm(d[0])===norm(q))||DATA.find(d=>norm(d[0]).includes(norm(q))&&q.length>3)}function allTopics(){return [...new Set([...DATA.map(d=>d[0]),...Object.values(cache).map(x=>x.title),...Object.values(offlinePack).map(x=>x.title)])]}function translate(){document.documentElement.lang=lang;document.querySelectorAll('[data-i]').forEach(e=>e.textContent=tr(e.dataset.i));document.querySelectorAll('[data-placeholder]').forEach(e=>e.placeholder=tr(e.dataset.placeholder));$('filter').placeholder=tr('filter');$('lang').value=lang;renderHome();if(current)renderArticle()}function solar(){const now=new Date(),h=now.getHours()+now.getMinutes()/60;let rise=7,set=19;try{const tz=Intl.DateTimeFormat().resolvedOptions().timeZone;if(tz!=='Asia/Singapore'){rise=6.5;set=18.5}}catch{}return h<rise||h>=set}function theme(){const dark=mode==='dark'||(mode==='auto'&&solar());document.body.classList.toggle('dark',dark);$('theme').textContent=dark?'🌙':'☀️';$('theme').title=`Theme: ${mode} (tap to change)`}function go(page){['home','results','library'].forEach(x=>$(x).classList.toggle('hidden',x!==page));history.pushState({page},'',page==='home'?'./':`#${page}`);window.scrollTo(0,0);if(page==='library')renderLibrary()}function suggestionButtons(container,topics){container.innerHTML='';topics.forEach(t=>{let b=document.createElement('button');b.className='pill';b.textContent=t;b.onclick=()=>openTopic(t);container.append(b)})}function renderHome(){const recent=bookmarks.slice(0,5);$('recent').innerHTML='';if(!recent.length)$('recent').textContent=tr('empty');recent.forEach(b=>addItem($('recent'),b));suggestionButtons($('featured'),DATA.slice(0,8).map(x=>x[0]));updateSuggestions()}function addItem(parent,b){const div=document.createElement('div');div.className='item';const link=document.createElement('button');link.className='link';link.textContent=b.title;link.onclick=()=>openTopic(b.title);const del=document.createElement('button');del.className='pill';del.textContent='×';del.setAttribute('aria-label','Remove bookmark');del.onclick=()=>{bookmarks=bookmarks.filter(x=>norm(x.title)!==norm(b.title));persist();renderHome();renderLibrary()};div.append(link,del);parent.append(div)}function updateSuggestions(){const q=norm($('query').value);suggestionButtons($('suggestions'),q?[...new Set([...allTopics().filter(t=>norm(t).includes(q)),...onlineSuggestions])].slice(0,8):['Singapore','Artificial intelligence','Climate change']);clearTimeout(suggestTimer);if(q.length>=2&&navigator.onLine){suggestTimer=setTimeout(async()=>{try{const r=await fetch(`https://${lang}.wikipedia.org/w/api.php?action=opensearch&search=${encodeURIComponent(q)}&limit=8&namespace=0&format=json&origin=*`,{signal:AbortSignal.timeout(5000)});const j=await r.json();if(norm($('query').value)===q){onlineSuggestions=j[1]||[];suggestionButtons($('suggestions'),[...new Set([...allTopics().filter(t=>norm(t).includes(q)),...onlineSuggestions])].slice(0,8))}}catch{}},300)}}function persist(){try{localStorage.fn_cache=JSON.stringify(cache)}catch{const keys=Object.keys(cache);for(const k of keys.slice(0,Math.ceil(keys.length/2)))delete cache[k];try{localStorage.fn_cache=JSON.stringify(cache)}catch{}}try{localStorage.fn_bookmarks=JSON.stringify(bookmarks)}catch{alert('Device storage is full. Export your bookmarks or free up space.')}}function savedData(title){if(offlinePack[norm(title)])return {...offlinePack[norm(title)],source:'offline'};const b=builtin(title);if(b)return{title:b[0],en:b[1],zh:b[2],ms:b[3],fun:b[4],source:'offline'};return cache[norm(title)]||bookmarks.find(x=>norm(x.title)===norm(title))||null}async function fetchWiki(q,requestedLang=lang){
  if(!navigator.onLine)return null;
- const api=requestedLang==='zh'?'zh':requestedLang==='ms'?'ms':'en';
- const base=`https://${api}.wikipedia.org/w/api.php`;
- const common='action=query&prop=extracts&explaintext=1&exchars=3600&redirects=1&format=json&origin=*';
- const urls=[`${base}?${common}&titles=${encodeURIComponent(q)}`,`${base}?${common}&generator=search&gsrsearch=${encodeURIComponent(q)}&gsrlimit=1`];
+ const language=['en','zh','ms'].includes(requestedLang)?requestedLang:'en';
+ const api=`https://${language}.wikipedia.org/w/api.php`;
+ const common='action=query&prop=extracts&explaintext=1&exsectionformat=plain&exchars=4200&redirects=1&format=json&origin=*';
+ const urls=[`${api}?${common}&titles=${encodeURIComponent(q)}`,`${api}?${common}&generator=search&gsrsearch=${encodeURIComponent(q)}&gsrlimit=1`];
  for(const url of urls){
   try{
-   const r=await fetch(url,{signal:AbortSignal.timeout(8500),cache:'no-store'});
+   const r=await fetch(url,{signal:AbortSignal.timeout(10000),cache:'no-store'});
    if(!r.ok)continue;
    const data=await r.json();
    const page=Object.values(data.query?.pages||{}).find(p=>!p.missing&&p.extract?.trim());
-   if(page)return{title:page.title,[requestedLang]:page.extract,source:'online',wikiLang:requestedLang};
-  }catch{}
+   if(page&&page.extract.trim().length>70)return{title:page.title,[requestedLang]:page.extract.trim(),source:'online',wikiLang:requestedLang};
+  }catch(e){console.warn('Wikipedia query unavailable',e)}
  }
+ // Wikipedia's REST summary endpoint provides a separate fallback for article lookups.
+ try{
+  const url=`https://${language}.wikipedia.org/api/rest_v1/page/summary/${encodeURIComponent(q.replace(/ /g,'_'))}`;
+  const r=await fetch(url,{signal:AbortSignal.timeout(9000),cache:'no-store'});
+  if(r.ok){const data=await r.json();if(data.extract?.trim())return{title:data.title||q,[requestedLang]:data.extract.trim(),source:'online',wikiLang:requestedLang}}
+ }catch(e){console.warn('Wikipedia summary unavailable',e)}
  return null;
 }
+
 function formatFun(text,article){
  const title=article?.title||'this topic';
  const cat=typeof inferCategory==='function'?inferCategory(article||{}):'Other';
@@ -101,24 +108,35 @@ async function openTopic(q){
  q=q.trim();if(!q)return;
  const requestId=++topicRequestId,requestedLang=lang;
  cheeky=false;
- const offline=savedData(q);
- const cached=cache[norm(q)];
- // Show the available local version immediately; online enrichment is attempted for EVERY topic.
- current=offline||cached||{title:q,source:'missing'};
+ const local=savedData(q);
+ const previousOnline=cache[norm(q)];
+ // Show the best locally available version immediately while trying the network.
+ const bestLocal=previousOnline?.source==='online' && (previousOnline[requestedLang]||previousOnline.en||'').length>(local?.[requestedLang]||local?.en||'').length?previousOnline:local||previousOnline;
+ current=bestLocal||{title:q,source:'missing'};
  go('results');renderArticle();
  if(!navigator.onLine)return;
- const res=await fetchWiki(q,requestedLang);
- if(requestId!==topicRequestId||lang!==requestedLang||!res)return;
- // Avoid replacing a richer article with a shorter result.
  const prior=current[requestedLang]||current.en||'';
- if(res[requestedLang].length<prior.length&&current.source==='online')return;
+ $('articleStatus').textContent='Checking Wikipedia for a fuller article…';
+ const res=await fetchWiki(q,requestedLang);
+ if(requestId!==topicRequestId||lang!==requestedLang)return;
+ if(!res){
+  $('articleStatus').textContent=(current.source==='missing'?'No article available':'Offline/cached article · Wikipedia unavailable right now');
+  return;
+ }
+ const newer=res[requestedLang]||'';
+ // Do not discard an existing longer cached explanation for a shorter remote extract.
+ if(newer.length<=prior.length && current.source==='online'){
+  $('articleStatus').textContent='Saved detailed article · Wikipedia checked';return;
+ }
+ if(newer.length<=prior.length && current.source!=='missing'){
+  $('articleStatus').textContent='Offline article · Wikipedia returned a shorter summary';return;
+ }
  const updated={...res,source:'online'};
- // Keep the original search title as a cache alias, and preserve saved offline data.
  cache[norm(q)]=updated;cache[norm(res.title)]=updated;
- // Refresh an existing bookmark's stored text, without adding new bookmarks automatically.
  bookmarks=bookmarks.map(b=>norm(b.title)===norm(q)||norm(b.title)===norm(res.title)?{...b,...updated}:b);
  current=updated;persist();renderArticle();
 }
+
 function renderLibrary(){const q=norm($('filter').value);$('savedList').innerHTML='';const list=bookmarks.filter(x=>norm(x.title).includes(q));if(!list.length)$('savedList').textContent=tr('empty');list.forEach(b=>addItem($('savedList'),b))}async function loadOfflinePack(){try{const db=await new Promise((resolve,reject)=>{const req=indexedDB.open('freenet-packs',1);req.onupgradeneeded=()=>req.result.createObjectStore('articles');req.onsuccess=()=>resolve(req.result);req.onerror=()=>reject(req.error)});window.packDB=db;await new Promise(resolve=>{const tx=db.transaction('articles');const req=tx.objectStore('articles').getAll();req.onsuccess=()=>{for(const a of req.result||[])offlinePack[norm(a.title)]=a;resolve()};req.onerror=resolve});renderHome()}catch(e){console.warn('Offline pack unavailable',e)}}
 $('packImport').onchange=async e=>{const file=e.target.files?.[0];if(!file)return;try{const parsed=JSON.parse(await file.text());const articles=Array.isArray(parsed)?parsed:parsed.articles;if(!Array.isArray(articles)||articles.length>100000||articles.some(a=>typeof a.title!=='string'||!(a.en||a.zh||a.ms)))throw Error('Expected an array of articles with title and en, zh or ms text. Maximum 100,000 per pack.');if(!window.packDB)throw Error('IndexedDB unavailable');const tx=window.packDB.transaction('articles','readwrite');for(const a of articles){tx.objectStore('articles').put({title:a.title.slice(0,300),en:String(a.en||''),zh:String(a.zh||''),ms:String(a.ms||'')},norm(a.title));offlinePack[norm(a.title)]={...a,source:'offline'}}await new Promise((resolve,reject)=>{tx.oncomplete=resolve;tx.onerror=()=>reject(tx.error)});$('packStatus').textContent=`${Object.keys(offlinePack).length.toLocaleString()} offline articles installed`;renderHome()}catch(err){alert('Could not import pack: '+err.message)}e.target.value=''};
 $('searchForm').onsubmit=e=>{e.preventDefault();openTopic($('query').value)};$('query').oninput=updateSuggestions;$('lang').onchange=e=>{lang=e.target.value;localStorage.fn_lang=lang;translate()};$('theme').onclick=()=>{mode=mode==='auto'?'light':mode==='light'?'dark':'auto';localStorage.fn_theme=mode;theme()};$('back1').onclick=$('back2').onclick=()=>go('home');$('all').onclick=()=>go('library');$('filter').oninput=renderLibrary;$('matthew').onclick=()=>{cheeky=!cheeky;renderArticle()};$('save').onclick=()=>{if(!current||current.source==='missing')return;const has=bookmarks.some(x=>norm(x.title)===norm(current.title));bookmarks=has?bookmarks.filter(x=>norm(x.title)!==norm(current.title)):[{...current},...bookmarks];persist();renderArticle();renderHome()};$('share').onclick=async()=>{const text=`${current.title}\n\n${$('articleText').textContent}\n\nFreeNet SG`;try{if(navigator.share)await navigator.share({title:current.title,text});else await navigator.clipboard.writeText(text)}catch{}};window.onpopstate=e=>{const page=e.state?.page||'home';['home','results','library'].forEach(x=>$(x).classList.toggle('hidden',x!==page))};// V5 category explorer: all results are from the bundled offline library.
